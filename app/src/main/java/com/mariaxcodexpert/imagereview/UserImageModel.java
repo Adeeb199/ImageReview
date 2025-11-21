@@ -172,4 +172,14 @@ public class UserImageModel {
         map.put("isUploading", isUploading);
         return map;
     }
+
+    public String getAverageRating() {
+        // Format double to 1 decimal place
+        if (avgRating == 0) {
+            return "0.0";
+        } else {
+            return String.format("%.1f", avgRating);
+        }
+    }
+
 }
