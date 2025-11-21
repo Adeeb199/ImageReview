@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="6dp"
+    android:foreground="?attr/selectableItemBackground"
+    android:elevation="6dp"
+    android:radius="12dp"
+    android:clipToOutline="true">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <!-- Main ImageView -->
+        <ImageView
+            android:id="@+id/imgUserImg"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:scaleType="centerCrop"
+            app:layout_constraintDimensionRatio="1:1"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:background="@drawable/img_placeholder_rounded"/>
+
+        <!-- Semi-transparent overlay while uploading -->
+        <View
+            android:id="@+id/overlayItem"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:background="#80000000"
+            android:visibility="gone"
+            app:layout_constraintTop_toTopOf="@id/imgUserImg"
+            app:layout_constraintBottom_toBottomOf="@id/imgUserImg"
+            app:layout_constraintStart_toStartOf="@id/imgUserImg"
+            app:layout_constraintEnd_toEndOf="@id/imgUserImg"/>
+
+        <!-- Progress bar at top -->
+        <ProgressBar
+            android:id="@+id/progressItem"
+            style="@android:style/Widget.Material.ProgressBar.Horizontal"
+            android:layout_width="0dp"
+            android:layout_height="6dp"
+            android:layout_gravity="top"
+            android:max="100"
+            android:progress="0"
+            android:progressDrawable="@drawable/progress_bar_style"
+            android:visibility="gone"
+            app:layout_constraintTop_toTopOf="@id/imgUserImg"
+            app:layout_constraintStart_toStartOf="@id/imgUserImg"
+            app:layout_constraintEnd_toEndOf="@id/imgUserImg"/>
+
+        <!-- Info Overlay (reviews & rating) -->
+        <LinearLayout
+            android:id="@+id/infoOverlay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="4dp"
+            android:paddingVertical="2dp"
+            android:gravity="center"
+            android:background="@drawable/bg_glass_round_small"
+            android:elevation="4dp"
+            app:layout_constraintBottom_toBottomOf="@id/imgUserImg"
+            app:layout_constraintEnd_toEndOf="@id/imgUserImg"
+            android:layout_marginBottom="4dp"
+            android:layout_marginEnd="4dp">
+
+            <!-- Reviews -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:src="@drawable/ic_reviews"
+                    app:tint="#FFFFFF" />
+
+                <TextView
+                    android:id="@+id/tvReviewCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="32"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    android:textSize="7sp"
+                    android:layout_marginStart="2dp" />
+            </LinearLayout>
+
+            <!-- Average Rating -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="2dp">
+
+                <ImageView
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:src="@drawable/ic_star_filled"
+                    app:tint="#FFD700" />
+
+                <TextView
+                    android:id="@+id/tvAvgRating"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="4.8"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    android:textSize="7sp"
+                    android:layout_marginStart="2dp" />
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.cardview.widget.CardView>

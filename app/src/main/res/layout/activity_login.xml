@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    android:padding="24dp">
+
+    <!-- App Logo -->
+    <ImageView
+        android:id="@+id/imgLogo"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="60dp"
+        android:src="@drawable/ic_launcher_foreground"
+        android:contentDescription="App Logo" />
+
+    <!-- Title -->
+    <TextView
+        android:id="@+id/txtTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Welcome"
+        android:textSize="26sp"
+        android:textStyle="bold"
+        android:textColor="#000000"
+        android:layout_centerHorizontal="true"
+        android:layout_below="@id/imgLogo"
+        android:layout_marginTop="20dp" />
+
+    <!-- Sub Text -->
+    <TextView
+        android:id="@+id/txtSub"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Sign in to continue"
+        android:textSize="16sp"
+        android:textColor="#777777"
+        android:layout_centerHorizontal="true"
+        android:layout_below="@id/txtTitle"
+        android:layout_marginTop="6dp" />
+
+    <!-- Google Sign In Button -->
+    <LinearLayout
+        android:id="@+id/btnGoogleSignIn"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_centerHorizontal="true"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="80dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:background="@drawable/google_btn_bg">
+
+        <ImageView
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+
+            android:layout_marginEnd="12dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Sign in with Google"
+            android:textColor="#000000"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- ProgressBar -->
+    <ProgressBar
+        android:id="@+id/loginProgressBar"
+        style="?android:attr/progressBarStyleLarge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:visibility="gone" />
+
+</RelativeLayout>

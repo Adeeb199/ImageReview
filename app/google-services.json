@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "267235516428",
+    "project_id": "imagereview397",
+    "storage_bucket": "imagereview397.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:267235516428:android:ef54cdce734839b3834e29",
+        "android_client_info": {
+          "package_name": "com.mariaxcodexpert.imagereview"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "267235516428-p5nvn8037v70mumlsamiv4rru4n0dhb3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAYb8OjYOvO6efYP6A9_Bk9XJwaC5mGirI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "267235516428-p5nvn8037v70mumlsamiv4rru4n0dhb3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
