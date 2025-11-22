@@ -2,15 +2,14 @@ package com.mariaxcodexpert.imagereview;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.bumptech.glide.Glide;
+import com.google.android.material.textview.MaterialTextView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.UserProfileChangeRequest;
@@ -26,9 +25,9 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
 
     private ImageView imgUser;
-    private TextView txtUserName, txtUserEmail;
+    private MaterialTextView txtUserName, txtUserEmail;
     private LinearLayout cardUploadImage, cardReviewImage;
-    private Button btnLogout;
+    private MaterialTextView btnLogout;
 
     private final int MIN_PRELOAD_COUNT = 30;
     private FirebaseUser currentUser;
@@ -58,7 +57,6 @@ public class MainActivity extends AppCompatActivity {
         dbRef = FirebaseDatabase.getInstance("https://imagereview397-default-rtdb.firebaseio.com/")
                 .getReference("users");
 
-        // Preload images in background
         preloadImagesToCache();
 
         // Card click listeners
@@ -66,10 +64,9 @@ public class MainActivity extends AppCompatActivity {
                 startActivity(new Intent(MainActivity.this, UploadImageActivity.class))
         );
 
-        cardReviewImage.setOnClickListener(v -> {
-            // Go directly to ReviewImageActivity regardless of preload
-            startActivity(new Intent(MainActivity.this, ReviewImageActivity.class));
-        });
+        cardReviewImage.setOnClickListener(v ->
+                startActivity(new Intent(MainActivity.this, ReviewImageActivity.class))
+        );
 
         // Logout
         btnLogout.setOnClickListener(v -> {
@@ -109,26 +106,21 @@ public class MainActivity extends AppCompatActivity {
         finish();
     }
 
-    /**
-     * Preload images into singleton cache in background for smoother review experience.
-     * No Toasts are shown; this happens silently.
-     */
     private void preloadImagesToCache() {
         dbRef.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
-                List<HybridImageSelector.ImageData> preloadedImages = new ArrayList<>();
+                List<ReviewImageActivity.ImageData> preloadedImages = new ArrayList<>();
 
                 for (DataSnapshot userSnapshot : snapshot.getChildren()) {
                     String uid = userSnapshot.getKey();
-                    if (uid.equals(currentUser.getUid())) continue; // skip own images
+                    if (uid.equals(currentUser.getUid())) continue;
                     if (!userSnapshot.hasChild("images")) continue;
 
                     for (DataSnapshot imageSnap : userSnapshot.child("images").getChildren()) {
                         String imageEncoded = imageSnap.child("image").getValue(String.class);
                         if (imageEncoded == null || imageEncoded.isEmpty()) continue;
 
-                        int reviewCount = (int) imageSnap.child("reviews").getChildrenCount();
                         boolean alreadyReviewed = imageSnap.hasChild("reviews") &&
                                 imageSnap.child("reviews").hasChild(currentUser.getUid());
 
@@ -140,8 +132,8 @@ public class MainActivity extends AppCompatActivity {
                         if ((skipped != null && skipped) || alreadyReviewed) continue;
 
                         String imageId = imageSnap.getKey();
-                        preloadedImages.add(new HybridImageSelector.ImageData(
-                                uid, imageId, imageEncoded, reviewCount, false
+                        preloadedImages.add(new ReviewImageActivity.ImageData(
+                                uid, imageId, imageEncoded
                         ));
 
                         if (preloadedImages.size() >= MIN_PRELOAD_COUNT) break;
@@ -156,7 +148,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onCancelled(@NonNull DatabaseError error) {
-                // Silent fail, no Toast
+                // Silent fail
             }
         });
     }

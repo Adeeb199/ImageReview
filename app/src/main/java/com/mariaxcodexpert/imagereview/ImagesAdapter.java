@@ -1,8 +1,5 @@
 package com.mariaxcodexpert.imagereview;
 
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.util.Base64;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -14,6 +11,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 
 import java.util.List;
 
@@ -37,23 +35,23 @@ public class ImagesAdapter extends RecyclerView.Adapter<ImagesAdapter.ImageHolde
     public void onBindViewHolder(@NonNull ImageHolder holder, int position) {
         UserImageModel model = list.get(position);
 
-        // Reset overlay and progress
+        // Show progress while loading
+        holder.progress.setVisibility(View.VISIBLE);
         holder.overlay.setVisibility(View.GONE);
+
+        // Load image from Firebase Storage URL using Glide
+        Glide.with(holder.itemView.getContext())
+                .load(model.getImageUrl()) // <-- FIXED: use imageUrl instead of Base64
+                .diskCacheStrategy(DiskCacheStrategy.ALL)
+                .centerCrop()
+                .placeholder(R.drawable.placeholder)
+                .error(R.drawable.error_placeholder)
+                .into(holder.img);
+
+        // Hide progress after Glide starts loading (optional: can use listener for full control)
         holder.progress.setVisibility(View.GONE);
 
-        // Decode Base64 to Bitmap and load with Glide
-        try {
-            byte[] decode = Base64.decode(model.getBase64Image(), Base64.DEFAULT);
-            Bitmap bmp = BitmapFactory.decodeByteArray(decode, 0, decode.length);
-            Glide.with(holder.itemView.getContext())
-                    .asBitmap()
-                    .load(bmp)
-                    .centerCrop()
-                    .into(holder.img);
-        } catch (Exception ignored) {}
-
         // Display review info overlay
-        // Ensure default 0 values if null
         int reviews = model.getReviewCount();
         double avg = model.getAvgRating();
 
@@ -67,7 +65,7 @@ public class ImagesAdapter extends RecyclerView.Adapter<ImagesAdapter.ImageHolde
     }
 
     public void addImageAtTop(UserImageModel image) {
-        // When new image uploaded, insert at top with default review=0, avg=0
+        // When new image uploaded, insert at top
         list.add(0, image);
         notifyItemInserted(0);
     }

@@ -8,6 +8,7 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.gms.auth.api.identity.BeginSignInRequest;
@@ -22,16 +23,20 @@ import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class LoginActivity extends AppCompatActivity {
 
     private static final int REQ_ONE_TAP = 2;
+    private static final String TAG = "LoginActivity";
+
     private SignInClient oneTapClient;
     private BeginSignInRequest signInRequest;
     private FirebaseAuth firebaseAuth;
 
-    LinearLayout btnGoogleSignIn;
-    ProgressBar progressBar;
-    private static final String TAG = "LoginActivity";
+    private LinearLayout btnGoogleSignIn;
+    private ProgressBar progressBar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,6 +47,14 @@ public class LoginActivity extends AppCompatActivity {
         progressBar = findViewById(R.id.loginProgressBar);
 
         firebaseAuth = FirebaseAuth.getInstance();
+
+        // Ultra-fast pre-check
+        FirebaseUser currentUser = firebaseAuth.getCurrentUser();
+        if (currentUser != null) {
+            launchMain(currentUser);
+            return;
+        }
+
         oneTapClient = Identity.getSignInClient(this);
 
         signInRequest = BeginSignInRequest.builder()
@@ -52,6 +65,7 @@ public class LoginActivity extends AppCompatActivity {
                                 .setFilterByAuthorizedAccounts(false)
                                 .build()
                 )
+                .setAutoSelectEnabled(true) // super fast returning users
                 .build();
 
         btnGoogleSignIn.setOnClickListener(v -> startSignIn());
@@ -63,62 +77,78 @@ public class LoginActivity extends AppCompatActivity {
         oneTapClient.beginSignIn(signInRequest)
                 .addOnSuccessListener(this, result -> {
                     try {
-                        startIntentSenderForResult(result.getPendingIntent().getIntentSender(),
-                                REQ_ONE_TAP, null, 0, 0, 0);
+                        startIntentSenderForResult(
+                                result.getPendingIntent().getIntentSender(),
+                                REQ_ONE_TAP, null, 0, 0, 0
+                        );
                     } catch (Exception e) {
-                        progressBar.setVisibility(View.GONE);
-                        Toast.makeText(LoginActivity.this, "Sign-In Failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                        Log.e(TAG, "Sign-In Exception", e);
+                        handleSignInError(e);
                     }
                 })
-                .addOnFailureListener(this, e -> {
-                    progressBar.setVisibility(View.GONE);
-                    Toast.makeText(LoginActivity.this, "Sign-In Failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    Log.e(TAG, "Sign-In Failed", e);
-                });
+                .addOnFailureListener(this, this::handleSignInError);
+    }
+
+    private void handleSignInError(Exception e) {
+        progressBar.setVisibility(View.GONE);
+        Log.e(TAG, "Sign-In Error", e);
+        Toast.makeText(this, "Sign-In Failed", Toast.LENGTH_SHORT).show();
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        progressBar.setVisibility(View.GONE);
 
-        if (requestCode == REQ_ONE_TAP) {
-            try {
-                SignInCredential credential = oneTapClient.getSignInCredentialFromIntent(data);
-                String idToken = credential.getGoogleIdToken();
+        if (requestCode != REQ_ONE_TAP) return;
+        progressBar.setVisibility(View.VISIBLE);
 
-                if (idToken != null) {
-                    AuthCredential firebaseCredential = GoogleAuthProvider.getCredential(idToken, null);
-                    firebaseAuth.signInWithCredential(firebaseCredential)
-                            .addOnCompleteListener(this, task -> {
-                                if (task.isSuccessful()) {
-                                    FirebaseUser user = firebaseAuth.getCurrentUser();
-                                    Toast.makeText(this, "Welcome " + (user != null ? user.getDisplayName() : ""), Toast.LENGTH_SHORT).show();
-                                    Log.d(TAG, "Login Success: " + (user != null ? user.getEmail() : "null"));
+        try {
+            SignInCredential credential = oneTapClient.getSignInCredentialFromIntent(data);
+            String idToken = credential.getGoogleIdToken();
 
-                                    // Initialize user node in Realtime Database
-                                    DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("users");
-                                    if (user != null) {
-                                        dbRef.child(user.getUid()).child("name").setValue(user.getDisplayName());
-                                        dbRef.child(user.getUid()).child("email").setValue(user.getEmail());
-                                    }
+            if (idToken != null) {
+                AuthCredential firebaseCredential = GoogleAuthProvider.getCredential(idToken, null);
 
-                                    startActivity(new Intent(LoginActivity.this, MainActivity.class));
-                                    finish();
-                                } else {
-                                    Toast.makeText(this, "Firebase Auth Failed", Toast.LENGTH_SHORT).show();
-                                    Log.e(TAG, "Firebase Auth Error", task.getException());
-                                }
-                            });
-                } else {
-                    Toast.makeText(this, "No ID token!", Toast.LENGTH_SHORT).show();
-                }
-
-            } catch (ApiException e) {
-                Toast.makeText(this, "Sign-In Failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                Log.e(TAG, "Google Sign-In Error", e);
+                // Single-line advanced sign-in with completion listener
+                firebaseAuth.signInWithCredential(firebaseCredential)
+                        .addOnCompleteListener(this, task -> {
+                            progressBar.setVisibility(View.GONE);
+                            if (task.isSuccessful()) {
+                                FirebaseUser user = firebaseAuth.getCurrentUser();
+                                if (user != null) initUserInDatabase(user);
+                                launchMain(user);
+                            } else {
+                                Log.e(TAG, "Firebase Auth Failed", task.getException());
+                                Toast.makeText(this, "Authentication Failed", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+            } else {
+                progressBar.setVisibility(View.GONE);
+                Toast.makeText(this, "No ID token!", Toast.LENGTH_SHORT).show();
             }
+
+        } catch (ApiException e) {
+            progressBar.setVisibility(View.GONE);
+            Log.e(TAG, "Google Sign-In Error", e);
+            Toast.makeText(this, "Sign-In Failed", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    // Advanced DB write: batch in one call
+    private void initUserInDatabase(@NonNull FirebaseUser user) {
+        DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("users");
+
+        Map<String, Object> userMap = new HashMap<>();
+        userMap.put("name", user.getDisplayName());
+        userMap.put("email", user.getEmail());
+        userMap.put("lastLogin", System.currentTimeMillis());
+
+        dbRef.child(user.getUid()).updateChildren(userMap)
+                .addOnFailureListener(e -> Log.e(TAG, "DB Init Failed", e));
+    }
+
+    private void launchMain(FirebaseUser user) {
+        Toast.makeText(this, "Welcome " + (user != null ? user.getDisplayName() : ""), Toast.LENGTH_SHORT).show();
+        startActivity(new Intent(LoginActivity.this, MainActivity.class));
+        finish();
     }
 }

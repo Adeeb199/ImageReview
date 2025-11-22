@@ -51,14 +51,19 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:padding="12dp"
-        android:background="@drawable/google_btn_bg">
+        android:background="@drawable/google_btn_bg"
+        android:clickable="true"
+        android:focusable="true">
 
+        <!-- Google G Icon -->
         <ImageView
             android:layout_width="26dp"
             android:layout_height="26dp"
+            android:layout_marginEnd="12dp"
+            android:src="@drawable/ic_google_logo"
+            android:contentDescription="Google Logo" />
 
-            android:layout_marginEnd="12dp" />
-
+        <!-- Button Text -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

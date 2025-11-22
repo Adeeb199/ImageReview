@@ -5,7 +5,7 @@ import java.util.List;
 
 public class ImageCache {
     private static ImageCache instance;
-    private final List<HybridImageSelector.ImageData> images = new ArrayList<>();
+    private final List<ReviewImageActivity.ImageData> images = new ArrayList<>();
 
     private ImageCache() {}
 
@@ -14,13 +14,13 @@ public class ImageCache {
         return instance;
     }
 
-    public List<HybridImageSelector.ImageData> getImages() {
-        return images;
+    public List<ReviewImageActivity.ImageData> getImages() {
+        return new ArrayList<>(images); // return a copy for safety
     }
 
-    public void setImages(List<HybridImageSelector.ImageData> list) {
+    public void setImages(List<ReviewImageActivity.ImageData> list) {
         images.clear();
-        images.addAll(list);
+        if (list != null) images.addAll(list);
     }
 
     public void clear() {

@@ -15,6 +15,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.load.engine.GlideException;
 import com.bumptech.glide.request.RequestListener;
 import com.bumptech.glide.request.target.Target;
@@ -27,7 +28,9 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ReviewImageActivity extends AppCompatActivity {
 
@@ -42,24 +45,19 @@ public class ReviewImageActivity extends AppCompatActivity {
     private FirebaseUser currentUser;
     private DatabaseReference dbRef;
 
-    private HybridImageSelector imageSelector;
+    private final List<ImageData> imageQueue = new ArrayList<>();
     private final List<String> skippedImages = new ArrayList<>();
+    private int currentIndex = -1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_review_image);
 
-        try {
-            bindUI();
-            setupFirebase();
-            setupListeners();
-            loadImagesFromCacheOrFirebase();
-        } catch (Exception e) {
-            Log.e(TAG, "Error in onCreate", e);
-            Toast.makeText(this, "Unexpected error occurred", Toast.LENGTH_SHORT).show();
-            finish();
-        }
+        bindUI();
+        setupFirebase();
+        setupListeners();
+        loadImagesFromCacheOrFirebase();
     }
 
     private void bindUI() {
@@ -96,137 +94,119 @@ public class ReviewImageActivity extends AppCompatActivity {
     }
 
     private void loadImagesFromCacheOrFirebase() {
-        try {
-            List<HybridImageSelector.ImageData> cached = ImageCache.getInstance().getImages();
-            if (!cached.isEmpty()) {
-                imageSelector = new HybridImageSelector(cached, skippedImages, currentUser.getUid(), 30);
-                displayCurrentImage();
-            } else {
-                loadImagesFromFirebase();
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "loadImagesFromCacheOrFirebase error", e);
-            Toast.makeText(this, "Failed to load images", Toast.LENGTH_SHORT).show();
-            finish();
+        List<ImageData> cached = ImageCache.getInstance().getImages();
+        if (!cached.isEmpty()) {
+            imageQueue.addAll(cached);
+            displayNextImage();
+        } else {
+            loadImagesFromFirebase();
         }
     }
 
     private void loadImagesFromFirebase() {
-        try {
-            dbRef.addListenerForSingleValueEvent(new ValueEventListener() {
-                @Override
-                public void onDataChange(@NonNull DataSnapshot snapshot) {
-                    try {
-                        List<HybridImageSelector.ImageData> pool = new ArrayList<>();
-                        for (DataSnapshot userSnapshot : snapshot.getChildren()) {
-                            String uid = userSnapshot.getKey();
-                            if (uid.equals(currentUser.getUid())) continue;
-                            if (!userSnapshot.hasChild("images")) continue;
+        dbRef.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                List<ImageData> preloadedImages = new ArrayList<>();
 
-                            for (DataSnapshot imageSnap : userSnapshot.child("images").getChildren()) {
-                                String imageEncoded = imageSnap.child("image").getValue(String.class);
-                                if (imageEncoded == null || imageEncoded.isEmpty()) continue;
+                for (DataSnapshot userSnap : snapshot.getChildren()) {
+                    String uid = userSnap.getKey();
+                    if (uid.equals(currentUser.getUid())) continue;
+                    if (!userSnap.hasChild("images")) continue;
 
-                                int reviewCount = (int) imageSnap.child("reviews").getChildrenCount();
-                                boolean alreadyReviewed = imageSnap.hasChild("reviews") &&
-                                        imageSnap.child("reviews").hasChild(currentUser.getUid());
+                    for (DataSnapshot imgSnap : userSnap.child("images").getChildren()) {
+                        String imageUrl = imgSnap.child("imageUrl").getValue(String.class);
+                        if (imageUrl == null || imageUrl.isEmpty()) continue;
 
-                                Boolean skipped = null;
-                                if (alreadyReviewed)
-                                    skipped = imageSnap.child("reviews").child(currentUser.getUid())
-                                            .child("skipped").getValue(Boolean.class);
+                        boolean alreadyReviewed = imgSnap.hasChild("reviews") &&
+                                imgSnap.child("reviews").hasChild(currentUser.getUid());
+                        Boolean skipped = null;
+                        if (alreadyReviewed)
+                            skipped = imgSnap.child("reviews").child(currentUser.getUid())
+                                    .child("skipped").getValue(Boolean.class);
 
-                                if ((skipped != null && skipped) || alreadyReviewed) continue;
+                        if ((skipped != null && skipped) || alreadyReviewed) continue;
 
-                                pool.add(new HybridImageSelector.ImageData(
-                                        uid, imageSnap.getKey(), imageEncoded, reviewCount, false));
-                            }
-                        }
-
-                        if (pool.isEmpty()) {
-                            Toast.makeText(ReviewImageActivity.this, "No images to review", Toast.LENGTH_SHORT).show();
-                            finish();
-                            return;
-                        }
-
-                        imageSelector = new HybridImageSelector(pool, skippedImages, currentUser.getUid(), 30);
-                        displayCurrentImage();
-                    } catch (Exception e) {
-                        Log.e(TAG, "Error processing Firebase snapshot", e);
-                        Toast.makeText(ReviewImageActivity.this, "Failed to process images", Toast.LENGTH_SHORT).show();
-                        finish();
+                        preloadedImages.add(new ImageData(uid, imgSnap.getKey(), imageUrl));
                     }
                 }
 
-                @Override
-                public void onCancelled(@NonNull DatabaseError error) {
-                    Log.e(TAG, "Firebase load cancelled", error.toException());
-                    Toast.makeText(ReviewImageActivity.this, "Failed to load images", Toast.LENGTH_SHORT).show();
+                if (preloadedImages.isEmpty()) {
+                    Toast.makeText(ReviewImageActivity.this, "No images to review", Toast.LENGTH_SHORT).show();
                     finish();
+                    return;
                 }
-            });
-        } catch (Exception e) {
-            Log.e(TAG, "loadImagesFromFirebase error", e);
-            Toast.makeText(this, "Failed to load images", Toast.LENGTH_SHORT).show();
-            finish();
-        }
-    }
 
-    private void displayCurrentImage() {
-        try {
-            HybridImageSelector.ImageData imageData = imageSelector.peekNextImage();
-            if (imageData == null) {
-                Toast.makeText(this, "All images reviewed", Toast.LENGTH_SHORT).show();
-                finish();
-                return;
+                imageQueue.addAll(preloadedImages);
+                ImageCache.getInstance().setImages(preloadedImages); // cache for next time
+                displayNextImage();
             }
 
-            progressBar.setVisibility(android.view.View.VISIBLE);
-            imgReview.setVisibility(android.view.View.INVISIBLE);
-            setButtonsEnabled(false);
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                Log.e(TAG, "Firebase load cancelled", error.toException());
+                Toast.makeText(ReviewImageActivity.this, "Failed to load images", Toast.LENGTH_SHORT).show();
+                finish();
+            }
+        });
+    }
 
-            btnHeart.setAlpha(0.4f);
-            btnSmile.setAlpha(0.4f);
-            btnLike.setAlpha(0.4f);
-            ratingBar.setRating(0);
-            etReview.setText("");
-
-            String base64Uri = "data:image/png;base64," + imageData.imageBase64.replaceAll("\\s+", "");
-            Glide.with(this)
-                    .load(base64Uri)
-                    .centerCrop()
-                    .listener(new RequestListener<android.graphics.drawable.Drawable>() {
-                        @Override
-                        public boolean onLoadFailed(GlideException e, Object model, Target<android.graphics.drawable.Drawable> target, boolean isFirstResource) {
-                            progressBar.setVisibility(android.view.View.GONE);
-                            Toast.makeText(ReviewImageActivity.this, "Failed to load image", Toast.LENGTH_SHORT).show();
-                            setButtonsEnabled(false);
-                            Log.e(TAG, "Glide load failed", e);
-                            return false;
-                        }
-
-                        @Override
-                        public boolean onResourceReady(android.graphics.drawable.Drawable resource, Object model, Target<android.graphics.drawable.Drawable> target, com.bumptech.glide.load.DataSource dataSource, boolean isFirstResource) {
-                            progressBar.setVisibility(android.view.View.GONE);
-                            imgReview.setVisibility(android.view.View.VISIBLE);
-                            fadeIn(imgReview);
-                            setButtonsEnabled(true);
-                            return false;
-                        }
-                    })
-                    .into(imgReview);
-
-        } catch (Exception e) {
-            Log.e(TAG, "displayCurrentImage error", e);
-            progressBar.setVisibility(android.view.View.GONE);
-            setButtonsEnabled(false);
-            Toast.makeText(this, "Error displaying image", Toast.LENGTH_SHORT).show();
+    private void displayNextImage() {
+        currentIndex++;
+        if (currentIndex >= imageQueue.size()) {
+            Toast.makeText(this, "All images reviewed", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
         }
+
+        ImageData current = imageQueue.get(currentIndex);
+
+        progressBar.setVisibility(android.view.View.VISIBLE);
+        imgReview.setVisibility(android.view.View.INVISIBLE);
+        setButtonsEnabled(false);
+
+        btnHeart.setAlpha(0.4f);
+        btnSmile.setAlpha(0.4f);
+        btnLike.setAlpha(0.4f);
+        ratingBar.setRating(0);
+        etReview.setText("");
+
+        Glide.with(this)
+                .load(current.imageUrl)
+                .diskCacheStrategy(DiskCacheStrategy.ALL)
+                .centerCrop()
+                .listener(new RequestListener<android.graphics.drawable.Drawable>() {
+                    @Override
+                    public boolean onLoadFailed(GlideException e, Object model, Target<android.graphics.drawable.Drawable> target, boolean isFirstResource) {
+                        progressBar.setVisibility(android.view.View.GONE);
+                        Toast.makeText(ReviewImageActivity.this, "Failed to load image", Toast.LENGTH_SHORT).show();
+                        return false;
+                    }
+
+                    @Override
+                    public boolean onResourceReady(android.graphics.drawable.Drawable resource, Object model, Target<android.graphics.drawable.Drawable> target, com.bumptech.glide.load.DataSource dataSource, boolean isFirstResource) {
+                        progressBar.setVisibility(android.view.View.GONE);
+                        imgReview.setVisibility(android.view.View.VISIBLE);
+                        fadeIn(imgReview);
+                        setButtonsEnabled(true);
+
+                        // Preload next image
+                        if (currentIndex + 1 < imageQueue.size()) {
+                            String nextUrl = imageQueue.get(currentIndex + 1).imageUrl;
+                            Glide.with(ReviewImageActivity.this)
+                                    .load(nextUrl)
+                                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                                    .preload();
+                        }
+                        return false;
+                    }
+                })
+                .into(imgReview);
     }
 
     private void fadeIn(android.view.View view) {
         Animation fadeIn = new AlphaAnimation(0f, 1f);
-        fadeIn.setDuration(300);
+        fadeIn.setDuration(250);
         view.startAnimation(fadeIn);
     }
 
@@ -239,123 +219,80 @@ public class ReviewImageActivity extends AppCompatActivity {
         float alpha = enabled ? 1f : 0.4f;
         btnSubmit.setAlpha(alpha);
         btnSkip.setAlpha(alpha);
-        btnHeart.setAlpha(enabled && btnHeart.getAlpha() == 1f ? 1f : 0.4f);
-        btnSmile.setAlpha(enabled && btnSmile.getAlpha() == 1f ? 1f : 0.4f);
-        btnLike.setAlpha(enabled && btnLike.getAlpha() == 1f ? 1f : 0.4f);
     }
 
     private void safeFirebaseWrite(DatabaseReference ref, Object value, Runnable onSuccess) {
-        try {
-            setButtonsEnabled(false);
-            ref.setValue(value)
-                    .addOnSuccessListener(aVoid -> {
-                        try {
-                            onSuccess.run();
-                        } catch (Exception e) {
-                            Log.e(TAG, "onSuccess Runnable error", e);
-                        } finally {
-                            setButtonsEnabled(true);
-                        }
-                    })
-                    .addOnFailureListener(e -> {
-                        Log.e(TAG, "Firebase write failed", e);
-                        Toast.makeText(this, "Action failed, try again", Toast.LENGTH_SHORT).show();
-                        setButtonsEnabled(true);
-                    });
-        } catch (Exception e) {
-            Log.e(TAG, "safeFirebaseWrite error", e);
-            Toast.makeText(this, "Unexpected error during action", Toast.LENGTH_SHORT).show();
-            setButtonsEnabled(true);
-        }
-    }
-
-    private void nextImage() {
-        try {
-            HybridImageSelector.ImageData currentImage = imageSelector.peekNextImage();
-            if (currentImage != null) imageSelector.markImageInteracted(currentImage);
-            displayCurrentImage();
-        } catch (Exception e) {
-            Log.e(TAG, "nextImage error", e);
-            displayCurrentImage();
-        }
+        setButtonsEnabled(false);
+        ref.setValue(value)
+                .addOnSuccessListener(aVoid -> {
+                    onSuccess.run();
+                    setButtonsEnabled(true);
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Firebase write failed", e);
+                    Toast.makeText(this, "Action failed, try again", Toast.LENGTH_SHORT).show();
+                    setButtonsEnabled(true);
+                });
     }
 
     private void submitReaction(String reaction, ImageView clickedBtn) {
-        try {
-            HybridImageSelector.ImageData imageData = imageSelector.peekNextImage();
-            if (imageData == null) return;
+        if (currentIndex >= imageQueue.size()) return;
+        ImageData current = imageQueue.get(currentIndex);
 
-            safeFirebaseWrite(dbRef.child(imageData.uid)
-                            .child("images").child(imageData.imageId)
-                            .child("reviews").child(currentUser.getUid())
-                            .child("reaction"),
-                    reaction, () -> {
-                        imageSelector.markImageInteracted(imageData);
-                        highlightSelectedEmoji(clickedBtn);
-                        nextImage();
-                    });
+        safeFirebaseWrite(dbRef.child(current.uid)
+                        .child("images").child(current.imageId)
+                        .child("reviews").child(currentUser.getUid())
+                        .child("reaction"),
+                reaction, this::displayNextImage);
 
-        } catch (Exception e) {
-            Log.e(TAG, "submitReaction error", e);
-            Toast.makeText(this, "Failed to submit reaction", Toast.LENGTH_SHORT).show();
-            setButtonsEnabled(true);
-        }
+        highlightSelectedEmoji(clickedBtn);
     }
 
     private void submitReview() {
-        try {
-            HybridImageSelector.ImageData imageData = imageSelector.peekNextImage();
-            if (imageData == null) return;
+        if (currentIndex >= imageQueue.size()) return;
+        ImageData current = imageQueue.get(currentIndex);
 
-            float rating = ratingBar.getRating();
-            String reviewText = etReview.getText().toString();
+        float rating = ratingBar.getRating();
+        String reviewText = etReview.getText().toString();
 
-            safeFirebaseWrite(dbRef.child(imageData.uid)
-                            .child("images").child(imageData.imageId)
-                            .child("reviews").child(currentUser.getUid())
-                            .child("rating"),
-                    (int) rating, () -> {});
+        Map<String, Object> reviewData = new HashMap<>();
+        reviewData.put("rating", (int) rating);
+        reviewData.put("text", reviewText);
 
-            safeFirebaseWrite(dbRef.child(imageData.uid)
-                            .child("images").child(imageData.imageId)
-                            .child("reviews").child(currentUser.getUid())
-                            .child("text"),
-                    reviewText, () -> {
-                        imageSelector.markImageInteracted(imageData);
-                        nextImage();
-                    });
-
-        } catch (Exception e) {
-            Log.e(TAG, "submitReview error", e);
-            Toast.makeText(this, "Failed to submit review", Toast.LENGTH_SHORT).show();
-            setButtonsEnabled(true);
-        }
+        safeFirebaseWrite(dbRef.child(current.uid)
+                        .child("images").child(current.imageId)
+                        .child("reviews").child(currentUser.getUid()),
+                reviewData, this::displayNextImage);
     }
 
     private void skipImage() {
-        try {
-            HybridImageSelector.ImageData imageData = imageSelector.peekNextImage();
-            if (imageData == null) return;
+        if (currentIndex >= imageQueue.size()) return;
+        ImageData current = imageQueue.get(currentIndex);
+        skippedImages.add(current.imageId);
 
-            skippedImages.add(imageData.imageId);
-            imageSelector.skipImage(imageData);
-
-            safeFirebaseWrite(dbRef.child(imageData.uid)
-                            .child("images").child(imageData.imageId)
-                            .child("reviews").child(currentUser.getUid())
-                            .child("skipped"),
-                    true, this::nextImage);
-
-        } catch (Exception e) {
-            Log.e(TAG, "skipImage error", e);
-            Toast.makeText(this, "Failed to skip image", Toast.LENGTH_SHORT).show();
-            setButtonsEnabled(true);
-        }
+        safeFirebaseWrite(dbRef.child(current.uid)
+                        .child("images").child(current.imageId)
+                        .child("reviews").child(currentUser.getUid())
+                        .child("skipped"),
+                true, this::displayNextImage);
     }
 
     private void highlightSelectedEmoji(ImageView selected) {
         btnHeart.setAlpha(selected == btnHeart ? 1f : 0.4f);
         btnSmile.setAlpha(selected == btnSmile ? 1f : 0.4f);
         btnLike.setAlpha(selected == btnLike ? 1f : 0.4f);
+    }
+
+    // --------------------- Inner class for image data ---------------------
+    static class ImageData {
+        String uid;
+        String imageId;
+        String imageUrl; // Use Firebase Storage URL now
+
+        ImageData(String uid, String imageId, String imageUrl) {
+            this.uid = uid;
+            this.imageId = imageId;
+            this.imageUrl = imageUrl;
+        }
     }
 }

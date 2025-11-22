@@ -1,6 +1,5 @@
 package com.mariaxcodexpert.imagereview;
 
-import android.util.Base64;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -12,9 +11,11 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 import java.util.ArrayList;
 
@@ -39,25 +40,21 @@ public class UploadImageAdapter extends RecyclerView.Adapter<UploadImageAdapter.
 
         UserImageModel model = list.get(position);
 
-        // Decode Base64 and load image
-        byte[] decoded = Base64.decode(model.getBase64().replaceAll("\\s+", ""), Base64.DEFAULT);
+        // ===== Glide optimized =====
         Glide.with(holder.img.getContext())
-                .asBitmap()
-                .load(decoded)
-                .placeholder(R.drawable.placeholder)
+                .load(model.getImageUrl())
+                .diskCacheStrategy(DiskCacheStrategy.ALL) // Cache images
+                .placeholder(R.drawable.error_placeholder)
+                .centerCrop()
                 .into(holder.img);
 
-        // Show uploading state
-        if (model.isUploading()) {
-            holder.progress.setVisibility(View.VISIBLE);
-            holder.overlay.setVisibility(View.VISIBLE);
-        } else {
-            holder.progress.setVisibility(View.GONE);
-            holder.overlay.setVisibility(View.GONE);
-        }
+        // ===== Uploading overlay =====
+        holder.progress.setVisibility(model.isUploading() ? View.VISIBLE : View.GONE);
+        holder.overlay.setVisibility(model.isUploading() ? View.VISIBLE : View.GONE);
 
-        // Load live review & rating from Firebase
+        // ===== Live review & rating =====
         if (model.getImageId() != null && model.getOwnerUid() != null) {
+
             DatabaseReference reviewRef = FirebaseDatabase.getInstance()
                     .getReference("users")
                     .child(model.getOwnerUid())
@@ -65,12 +62,13 @@ public class UploadImageAdapter extends RecyclerView.Adapter<UploadImageAdapter.
                     .child(model.getImageId())
                     .child("reviews");
 
-            reviewRef.addListenerForSingleValueEvent(new com.google.firebase.database.ValueEventListener() {
+            // Advanced: only fetch once + update model directly
+            reviewRef.addListenerForSingleValueEvent(new ValueEventListener() {
                 @Override
                 public void onDataChange(@NonNull DataSnapshot snapshot) {
                     model.updateStatsFromFirebase(snapshot);
                     holder.tvReviews.setText("Reviews: " + model.getReviewCount());
-                    holder.tvRating.setText("⭐ " + model.getAverageRating());
+                    holder.tvRating.setText("⭐ " + model.getAvgRatingFormatted());
                 }
 
                 @Override
@@ -79,9 +77,10 @@ public class UploadImageAdapter extends RecyclerView.Adapter<UploadImageAdapter.
                     holder.tvRating.setText("⭐ 0.0");
                 }
             });
+
         } else {
             holder.tvReviews.setText("Reviews: " + model.getReviewCount());
-            holder.tvRating.setText("⭐ " + model.getAverageRating());
+            holder.tvRating.setText("⭐ " + model.getAvgRatingFormatted());
         }
     }
 
